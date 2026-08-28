@@ -1,0 +1,31 @@
+{
+  "workspace": "payments-prod",
+  "terraform": {
+    "allowed": ">=1.8.0,<2.0.0",
+    "recommended": "1.13.0",
+    "minimum_security": "1.10.5"
+  },
+  "providers": [
+    {
+      "source": "registry.terraform.io/hashicorp/aws",
+      "deprecated_below": "5.0.0",
+      "blocked_below": "4.50.0",
+      "recommended": "5.80.0"
+    },
+    {
+      "source": "registry.terraform.io/hashicorp/kubernetes",
+      "deprecated_below": "2.25.0",
+      "blocked_below": "2.20.0",
+      "recommended": "2.35.0"
+    }
+  ],
+  "modules": [
+    {
+      "source": "git::ssh://git.example.com/platform/vpc.git",
+      "deprecated_versions": "<3.0.0",
+      "blocked_versions": "<2.5.0",
+      "replacement": "git::ssh://git.example.com/platform/network-foundation.git",
+      "deadline": "2026-12-31"
+    }
+  ]
+}

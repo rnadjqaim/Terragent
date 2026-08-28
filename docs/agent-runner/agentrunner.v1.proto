@@ -1,0 +1,135 @@
+syntax = "proto3";
+
+package terraform.agentrunner.v1;
+
+option go_package = "github.com/hashicorp/terraform/internal/agentrunner/agentrunnerv1";
+
+service AgentRunner {
+  rpc Handshake(HandshakeRequest) returns (HandshakeResponse);
+  rpc PlanRun(PlanRunRequest) returns (RunHandle);
+  rpc ApplyRun(ApplyRunRequest) returns (RunHandle);
+  rpc WatchRun(WatchRunRequest) returns (stream RunEvent);
+  rpc CancelRun(CancelRunRequest) returns (CancelRunResponse);
+  rpc GetRun(GetRunRequest) returns (Run);
+  rpc CheckVersions(CheckVersionsRequest) returns (CheckVersionsResponse);
+}
+
+message HandshakeRequest {
+  string client_name = 1;
+  string client_version = 2;
+  repeated string capabilities = 3;
+}
+
+message HandshakeResponse {
+  string server_version = 1;
+  repeated string accepted_capabilities = 2;
+  repeated DeprecationNotice notices = 3;
+}
+
+message PlanRunRequest {
+  string workspace_id = 1;
+  SourceBundle source = 2;
+  RunContext context = 3;
+  VersionSet versions = 4;
+  repeated string var_args = 5;
+}
+
+message ApplyRunRequest {
+  string workspace_id = 1;
+  string approved_plan_id = 2;
+  RunContext context = 3;
+}
+
+message SourceBundle {
+  string git_url = 1;
+  string git_ref = 2;
+  string working_directory = 3;
+  bytes archive_sha256 = 4;
+}
+
+message RunContext {
+  string actor = 1;
+  string environment = 2;
+  string reason = 3;
+  string correlation_id = 4;
+}
+
+message VersionSet {
+  string terraform_version = 1;
+  repeated ProviderVersion providers = 2;
+  repeated ModuleVersion modules = 3;
+}
+
+message ProviderVersion {
+  string source = 1;
+  string version = 2;
+}
+
+message ModuleVersion {
+  string source = 1;
+  string version = 2;
+}
+
+message RunHandle {
+  string run_id = 1;
+}
+
+message WatchRunRequest {
+  string run_id = 1;
+  int64 after_sequence = 2;
+}
+
+message CancelRunRequest {
+  string run_id = 1;
+  string reason = 2;
+}
+
+message CancelRunResponse {
+  string status = 1;
+}
+
+message GetRunRequest {
+  string run_id = 1;
+}
+
+message CheckVersionsRequest {
+  string workspace_id = 1;
+  VersionSet versions = 2;
+}
+
+message CheckVersionsResponse {
+  string decision = 1;
+  repeated DeprecationNotice notices = 2;
+}
+
+message RunEvent {
+  string run_id = 1;
+  string phase = 2;
+  string level = 3;
+  string message = 4;
+  int64 sequence = 5;
+}
+
+message Run {
+  string run_id = 1;
+  string status = 2;
+  string decision = 3;
+  repeated PolicyFinding findings = 4;
+  repeated DeprecationNotice deprecations = 5;
+}
+
+message PolicyFinding {
+  string severity = 1;
+  string code = 2;
+  string message = 3;
+  string resource_address = 4;
+}
+
+message DeprecationNotice {
+  string severity = 1;
+  string subject = 2;
+  string current_version = 3;
+  string recommended_version = 4;
+  string deadline = 5;
+  string message = 6;
+}

@@ -120,6 +120,12 @@ func initCommands(
 	// that to match.
 
 	Commands = map[string]cli.CommandFactory{
+		"agent-runner": func() (cli.Command, error) {
+			return &command.AgentRunnerCommand{
+				Meta: meta,
+			}, nil
+		},
+
 		"apply": func() (cli.Command, error) {
 			return &command.ApplyCommand{
 				Meta: meta,
