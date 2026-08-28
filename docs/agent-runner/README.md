@@ -54,12 +54,31 @@ terraform agent-runner check-versions
 
 the command currently uses a local mock runner. it accepts a run, checks version/deprecation rules, streams simple events, and returns a final decision.
 
+## terraform-agent command additions
+
+the `terraform-agent` branch adds major agent workflows:
+
+```text
+terraform agent-runner autofix
+terraform agent-runner iacai
+terraform agent-runner state-audit
+```
+
+- `autofix` remediates supported source findings such as public ingress, public s3 acl values, and missing rds encryption settings.
+- `iacai` accepts a prompt and routes source review, autofix, policy scanning, and state audit actions.
+- `state-audit` checks whether a stack uses supported remote state with encryption and locking controls.
+- human output is organized into summary, blast radius, remote state, agent actions, timeline, deprecations, and findings.
+- json output is available for ci and platform automation.
+
 ## examples
 
 ```text
 terraform agent-runner plan -workspace=payments-prod -module-version=2.3.1
 terraform agent-runner apply -workspace=payments-prod -approved-plan-id=plan-123
 terraform agent-runner check-versions -terraform-version=1.9.0
+terraform agent-runner autofix -source=infra -policy-scan
+terraform agent-runner iacai -source=infra -prompt="fix public access and audit remote state" -json
+terraform agent-runner state-audit -source=infra -env=prod
 ```
 
 ## next build step

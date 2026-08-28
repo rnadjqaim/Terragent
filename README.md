@@ -1,48 +1,185 @@
-# Terraform
+# Terraform Agent
 
-- Website: https://developer.hashicorp.com/terraform
-- Forums: [HashiCorp Discuss](https://discuss.hashicorp.com/c/terraform-core)
-- Documentation: [https://developer.hashicorp.com/terraform/docs](https://developer.hashicorp.com/terraform/docs)
-- Tutorials: [HashiCorp's Learn Platform](https://developer.hashicorp.com/terraform/tutorials)
-- Certification Exam: [HashiCorp Certified: Terraform Associate](https://www.hashicorp.com/certification/#hashicorp-certified-terraform-associate)
+- Repository: https://github.com/rnadjqaim/Terragent
+- Base engine: Terraform-compatible command line workflow
+- Focus: governed, auditable, agent-assisted Infrastructure as Code execution
 
-<img alt="Terraform" src="https://www.datocms-assets.com/2885/1731373310-terraform_white.svg" width="600px">
+<img alt="Terraform Agent" src="https://www.datocms-assets.com/2885/1731373310-terraform_white.svg" width="600px">
 
-Terraform is a tool for building, changing, and versioning infrastructure safely and efficiently. Terraform can manage existing and popular service providers as well as custom in-house solutions.
+Terraform Agent is an experimental governance layer for Infrastructure as Code.
+It keeps the familiar Terraform workflow, but adds an agent layer that can review,
+explain, fix, and govern infrastructure changes before execution.
 
-The key features of Terraform are:
+Terraform and OpenTofu execute infrastructure. Terragrunt organizes infrastructure.
+Terraform Agent governs infrastructure execution.
 
-- **Infrastructure as Code**: Infrastructure is described using a high-level configuration syntax. This allows a blueprint of your datacenter to be versioned and treated as you would any other code. Additionally, infrastructure can be shared and re-used.
+## Purpose
 
-- **Execution Plans**: Terraform has a "planning" step where it generates an execution plan. The execution plan shows what Terraform will do when you call apply. This lets you avoid any surprises when Terraform manipulates infrastructure.
+Infrastructure teams need developer self-service without losing control over
+security, state, approvals, versions, and auditability. Terraform Agent introduces
+a trusted execution model where policy, risk, state safety, and agent-assisted
+remediation happen before a run proceeds.
 
-- **Resource Graph**: Terraform builds a graph of all your resources, and parallelizes the creation and modification of any non-dependent resources. Because of this, Terraform builds infrastructure as efficiently as possible, and operators get insight into dependencies in their infrastructure.
+## Major Capabilities
 
-- **Change Automation**: Complex changesets can be applied to your infrastructure with minimal human interaction. With the previously mentioned execution plan and resource graph, you know exactly what Terraform will change and in what order, avoiding many possible human errors.
+- **Agent command mode**: Run agent workflows from the Terraform-compatible CLI.
+- **Autofix**: Remediate supported IaC policy findings directly in source files.
+- **iacAI prompt execution**: Give the agent a prompt and let it route review,
+  autofix, policy scan, and state audit actions.
+- **Readable run logs**: Human-friendly sections for summary, blast radius,
+  remote state, agent actions, timeline, deprecations, and findings.
+- **Policy scanner**: Detect risky Terraform source patterns before execution.
+- **Risk scoring**: Classify runs as `low`, `medium`, `high`, or `critical`.
+- **Blast radius summary**: Report scanned files, observed resources, security
+  findings, secrets, and protected resource hints.
+- **Remote state governance**: Detect remote backend usage, encryption, locking,
+  and production state risks.
+- **CI JSON output**: Emit machine-readable output for pipelines and policy gates.
+- **Approval-ready apply model**: Block apply unless an approved plan ID is used.
 
-For more information, refer to the [What is Terraform?](https://www.terraform.io/intro) page on the Terraform website.
+## Commands
 
-## Getting Started & Documentation
+Build the local binary:
 
-Documentation is available on the [Terraform website](https://developer.hashicorp.com/terraform):
+```bash
+go build -o ./terragent .
+```
 
-- [Introduction](https://developer.hashicorp.com/terraform/intro)
-- [Documentation](https://developer.hashicorp.com/terraform/docs)
+Run a governed plan:
 
-If you're new to Terraform and want to get started creating infrastructure, please check out our [Getting Started guides](https://learn.hashicorp.com/terraform#getting-started) on HashiCorp's learning platform. There are also [additional guides](https://learn.hashicorp.com/terraform#operations-and-development) to continue your learning.
+```bash
+./terragent agent-runner plan -workspace=payments-prod -module-version=2.3.1
+```
 
-Show off your Terraform knowledge by passing a certification exam. Visit the [certification page](https://www.hashicorp.com/certification/) for information about exams and find [study materials](https://learn.hashicorp.com/terraform/certification/terraform-associate) on HashiCorp's learning platform.
+Run a policy scan:
 
-## Developing Terraform
+```bash
+./terragent agent-runner plan -source=infra -policy-scan
+```
 
-This repository contains only Terraform core, which includes the command line interface and the main graph engine. Providers are implemented as plugins, and Terraform can automatically download providers that are published on [the Terraform Registry](https://registry.terraform.io). HashiCorp develops some providers, and others are developed by other organizations. For more information, refer to [Plugin development](https://developer.hashicorp.com/terraform/plugin).
+Run CI JSON output:
 
-- To learn more about compiling Terraform and contributing suggested changes, refer to [the contributing guide](.github/CONTRIBUTING.md).
+```bash
+./terragent agent-runner plan -source=infra -policy-scan -json
+```
 
-- To learn more about how we handle bug reports, refer to the [bug triage guide](./BUGPROCESS.md).
+Autofix supported findings:
 
-- To learn how to contribute to the Terraform documentation, refer to the [Web Unified Docs repository](https://github.com/hashicorp/web-unified-docs).
+```bash
+./terragent agent-runner autofix -source=infra -policy-scan
+```
+
+Preview autofix without writing files:
+
+```bash
+./terragent agent-runner autofix -source=infra -policy-scan -dry-run
+```
+
+Execute an iacAI prompt:
+
+```bash
+./terragent agent-runner iacai -source=infra -prompt="fix public access and audit remote state" -json
+```
+
+Audit remote state:
+
+```bash
+./terragent agent-runner state-audit -source=infra -env=prod
+```
+
+Apply an approved plan:
+
+```bash
+./terragent agent-runner apply -workspace=payments-prod -approved-plan-id=plan-123
+```
+
+Check version lifecycle rules:
+
+```bash
+./terragent agent-runner check-versions -terraform-version=1.9.0
+```
+
+## Example Result
+
+```text
+Terraform Agent
+
+Summary
+  run id   : run-1787945913373123000
+  status   : completed
+  decision : warn
+  risk     : medium
+  plan id  : plan-1787945913373123000
+
+Timeline
+  01 | received   | info  | run accepted for workspace "payments-prod"
+  02 | identity   | info  | actor "user" requested plan in dev
+  03 | versions   | warn  | version/deprecation check returned warnings
+  04 | lock       | info  | state lock checked
+  05 | init       | info  | terraform init scheduled on agent
+  06 | validate   | info  | terraform validate scheduled on agent
+  07 | plan       | info  | plan artifact prepared
+  08 | decision   | warn  | run decision: warn
+```
+
+## Policy Findings
+
+Terraform Agent can detect and block:
+
+- SSH exposed to `0.0.0.0/0`
+- RDP exposed to `0.0.0.0/0`
+- Public S3 ACLs
+- Secrets in `.tf` or `.tfvars` files
+- Unsupported Terraform versions
+- Blocked provider versions
+- Production stacks without supported remote state
+
+Terraform Agent can warn on:
+
+- Deprecated internal modules
+- RDS resources without explicit encryption settings
+- Remote state backends without obvious locking controls
+- Large blast-radius source changes
+
+## Remote State Governance
+
+The `state-audit` command detects supported remote backends such as:
+
+- `s3`
+- `azurerm`
+- `gcs`
+- `remote`
+- `consul`
+
+It evaluates whether the backend appears remote, encrypted, lock-aware, and
+workspace-aware. In production, missing remote state is treated as a blocking
+finding.
+
+## iacAI
+
+`iacai` is an agent command mode for prompt-driven IaC operations. It interprets
+the prompt, runs policy analysis, audits state when requested, and can execute
+supported autofix actions.
+
+Example:
+
+```bash
+./terragent agent-runner iacai \
+  -source=infra \
+  -prompt="fix public access and audit remote state for production" \
+  -json
+```
+
+## Development
+
+Run focused tests:
+
+```bash
+go test ./internal/agentrunner
+go test ./internal/command -run AgentRunner
+```
 
 ## License
 
-[Business Source License 1.1](https://github.com/hashicorp/terraform/blob/main/LICENSE)
+This experimental branch is based on Terraform source and follows the license
+terms included in this repository.

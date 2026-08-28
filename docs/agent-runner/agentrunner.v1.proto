@@ -118,6 +118,9 @@ message Run {
   repeated DeprecationNotice deprecations = 5;
   string risk = 6;
   BlastRadius blast_radius = 7;
+  StateSummary state = 8;
+  repeated AutoFix autofixes = 9;
+  repeated AgentAction agent_actions = 10;
 }
 
 message PolicyFinding {
@@ -143,4 +146,26 @@ message BlastRadius {
   int32 security_findings = 3;
   int32 secrets_found = 4;
   int32 protected_findings = 5;
+}
+
+message StateSummary {
+  string backend = 1;
+  bool remote = 2;
+  bool encrypted = 3;
+  bool locking = 4;
+  bool workspace_aware = 5;
+  string configuration_file = 6;
+}
+
+message AutoFix {
+  string file = 1;
+  string code = 2;
+  string description = 3;
+  bool applied = 4;
+}
+
+message AgentAction {
+  string name = 1;
+  string description = 2;
+  string status = 3;
 }

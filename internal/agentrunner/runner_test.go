@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -155,9 +156,113 @@ resource "aws_db_instance" "app" {
 	}
 }
 
-func writeTestFile(t *testing.T, dir, name, body string) {
-	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0600); err != nil {
+func TestAutoFixRemediatesPublicIngress(t *testing.T) {
+	sourceDir := t.TempDir()
+	path := writeTestFile(t, sourceDir, "main.tf", `
+resource "aws_security_group" "admin" {
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+`)
+
+	run, err := NewRunner().Run(context.Background(), Request{
+		Action:           ActionAutoFix,
+		TerraformVersion: "1.13.0",
+		SourceDir:        sourceDir,
+		PolicyScan:       true,
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
+
+	if run.Decision != "allow" {
+		t.Fatalf("unexpected decision %q with findings %#v", run.Decision, run.Findings)
+	}
+	if len(run.AutoFixes) != 1 || !run.AutoFixes[0].Applied {
+		t.Fatalf("unexpected autofixes %#v", run.AutoFixes)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "0.0.0.0/0") {
+		t.Fatalf("autofix did not remove public cidr: %s", data)
+	}
+}
+
+func TestStateAuditBlocksProdWithoutRemoteState(t *testing.T) {
+	sourceDir := t.TempDir()
+	writeTestFile(t, sourceDir, "main.tf", `resource "aws_s3_bucket" "logs" {}`)
+
+	run, err := NewRunner().Run(context.Background(), Request{
+		Action:           ActionStateAudit,
+		TerraformVersion: "1.13.0",
+		Environment:      "prod",
+		SourceDir:        sourceDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if run.Decision != "block" {
+		t.Fatalf("unexpected decision %q", run.Decision)
+	}
+	if len(run.Findings) != 1 || run.Findings[0].Code != "remote_state_missing" {
+		t.Fatalf("unexpected findings %#v", run.Findings)
+	}
+}
+
+func TestIACAIPromptRunsAutofixAndStateAudit(t *testing.T) {
+	sourceDir := t.TempDir()
+	writeTestFile(t, sourceDir, "main.tf", `
+terraform {
+  backend "s3" {
+    bucket         = "state"
+    key            = "prod/app.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    dynamodb_table = "locks"
+  }
+}
+
+resource "aws_security_group" "admin" {
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+`)
+
+	run, err := NewRunner().Run(context.Background(), Request{
+		Action:           ActionIACAI,
+		TerraformVersion: "1.13.0",
+		SourceDir:        sourceDir,
+		Prompt:           "fix public access and audit remote state for production",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if run.State.Backend != "s3" {
+		t.Fatalf("expected s3 state backend, got %#v", run.State)
+	}
+	if len(run.AutoFixes) == 0 {
+		t.Fatal("expected prompt to trigger autofix")
+	}
+	if run.Decision != "allow" {
+		t.Fatalf("unexpected decision %q with findings %#v", run.Decision, run.Findings)
+	}
+}
+
+func writeTestFile(t *testing.T, dir, name, body string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
