@@ -38,6 +38,7 @@ cloud + state backend
 ## files
 
 - `V-1.md` - first design
+- `V-2.md` - policy, risk, blast-radius, and ci output design
 - `agentrunner.v1.proto` - rpc draft
 - `version-policy.example.json` - sample version/deprecation rules
 
@@ -64,3 +65,27 @@ terraform agent-runner check-versions -terraform-version=1.9.0
 ## next build step
 
 replace the mock runner with a real rpc client and a worker that runs terraform in an isolated directory.
+
+## v-2 command additions
+
+v-2 adds the first governance layer around a run:
+
+```text
+terraform agent-runner plan -source=infra -policy-scan
+terraform agent-runner plan -source=infra -policy-scan -json
+```
+
+the policy scanner looks for dangerous source patterns before the runner schedules work:
+
+- public ssh or rdp from `0.0.0.0/0`
+- public s3 acl settings
+- rds resources without an explicit encryption setting
+- secrets committed in terraform or tfvars files
+- protected resource hints such as `prevent_destroy = true`
+
+each run now includes:
+
+- `risk`: low, medium, high, or critical
+- `blast radius`: scanned files, observed resources, security findings, secrets, and protected resource hints
+- policy findings that can warn or block the run
+- optional json output for ci systems

@@ -4,6 +4,7 @@
 package command
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"strings"
@@ -33,7 +34,7 @@ func (c *AgentRunnerCommand) Run(args []string) int {
 		return 1
 	}
 
-	req, err := c.parseRequest(action, args[1:])
+	req, jsonOutput, err := c.parseRequest(action, args[1:])
 	if err != nil {
 		c.Ui.Error(err.Error())
 		return 1
@@ -45,17 +46,22 @@ func (c *AgentRunnerCommand) Run(args []string) int {
 		return 1
 	}
 
-	c.renderRun(run)
+	if jsonOutput {
+		c.renderJSON(run)
+	} else {
+		c.renderRun(run)
+	}
 	if run.Decision == "block" {
 		return 1
 	}
 	return 0
 }
 
-func (c *AgentRunnerCommand) parseRequest(action agentrunner.Action, args []string) (agentrunner.Request, error) {
+func (c *AgentRunnerCommand) parseRequest(action agentrunner.Action, args []string) (agentrunner.Request, bool, error) {
 	flags := flag.NewFlagSet("agent-runner "+string(action), flag.ContinueOnError)
 
 	req := agentrunner.Request{Action: action}
+	var jsonOutput bool
 	flags.StringVar(&req.Workspace, "workspace", "default", "workspace id")
 	flags.StringVar(&req.Environment, "env", "dev", "environment name")
 	flags.StringVar(&req.Actor, "actor", "", "actor name")
@@ -65,22 +71,34 @@ func (c *AgentRunnerCommand) parseRequest(action agentrunner.Action, args []stri
 	flags.StringVar(&req.ProviderVersion, "aws-provider-version", "", "aws provider version")
 	flags.StringVar(&req.ModuleVersion, "module-version", "", "platform module version")
 	flags.StringVar(&req.ApprovedPlanID, "approved-plan-id", "", "approved plan id for apply")
+	flags.BoolVar(&req.PolicyScan, "policy-scan", false, "scan terraform source for security policy findings")
+	flags.BoolVar(&jsonOutput, "json", false, "render machine-readable json output")
 
 	if err := flags.Parse(args); err != nil {
-		return agentrunner.Request{}, err
+		return agentrunner.Request{}, false, err
 	}
 	if len(flags.Args()) != 0 {
-		return agentrunner.Request{}, fmt.Errorf("unexpected argument %q", flags.Args()[0])
+		return agentrunner.Request{}, false, fmt.Errorf("unexpected argument %q", flags.Args()[0])
 	}
-	return req, nil
+	return req, jsonOutput, nil
 }
 
 func (c *AgentRunnerCommand) renderRun(run agentrunner.Run) {
 	c.Ui.Output(fmt.Sprintf("agent runner run: %s", run.ID))
 	c.Ui.Output(fmt.Sprintf("status: %s", run.Status))
 	c.Ui.Output(fmt.Sprintf("decision: %s", run.Decision))
+	c.Ui.Output(fmt.Sprintf("risk: %s", run.Risk))
 	if run.PlanID != "" {
 		c.Ui.Output(fmt.Sprintf("plan id: %s", run.PlanID))
+	}
+	if run.BlastRadius.FilesScanned > 0 {
+		c.Ui.Output(fmt.Sprintf("blast radius: files=%d resources=%d security=%d secrets=%d protected=%d",
+			run.BlastRadius.FilesScanned,
+			run.BlastRadius.ResourcesObserved,
+			run.BlastRadius.SecurityFindings,
+			run.BlastRadius.SecretsFound,
+			run.BlastRadius.ProtectedFindings,
+		))
 	}
 
 	if len(run.Events) > 0 {
@@ -110,9 +128,22 @@ func (c *AgentRunnerCommand) renderRun(run agentrunner.Run) {
 		c.Ui.Output("")
 		c.Ui.Output("findings:")
 		for _, finding := range run.Findings {
-			c.Ui.Output(fmt.Sprintf("  [%s] %s: %s", finding.Severity, finding.Code, finding.Message))
+			line := fmt.Sprintf("  [%s] %s: %s", finding.Severity, finding.Code, finding.Message)
+			if finding.File != "" {
+				line += fmt.Sprintf(" file=%s", finding.File)
+			}
+			c.Ui.Output(line)
 		}
 	}
+}
+
+func (c *AgentRunnerCommand) renderJSON(run agentrunner.Run) {
+	data, err := json.MarshalIndent(run, "", "  ")
+	if err != nil {
+		c.Ui.Error(err.Error())
+		return
+	}
+	c.Ui.Output(string(data))
 }
 
 func (c *AgentRunnerCommand) Help() string {
@@ -137,10 +168,13 @@ Common options:
   -aws-provider-version=VERSION
   -module-version=VERSION
   -approved-plan-id=ID
+  -policy-scan
+  -json
 
 Examples:
 
   terraform agent-runner plan -workspace=payments-prod -module-version=2.3.1
+  terraform agent-runner plan -source=infra -policy-scan -json
   terraform agent-runner apply -workspace=payments-prod -approved-plan-id=plan-123
   terraform agent-runner check-versions -terraform-version=1.9.0
 `)

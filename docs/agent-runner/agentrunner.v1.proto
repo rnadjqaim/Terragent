@@ -116,6 +116,8 @@ message Run {
   string decision = 3;
   repeated PolicyFinding findings = 4;
   repeated DeprecationNotice deprecations = 5;
+  string risk = 6;
+  BlastRadius blast_radius = 7;
 }
 
 message PolicyFinding {
@@ -123,6 +125,7 @@ message PolicyFinding {
   string code = 2;
   string message = 3;
   string resource_address = 4;
+  string file = 5;
 }
 
 message DeprecationNotice {
@@ -132,4 +135,12 @@ message DeprecationNotice {
   string recommended_version = 4;
   string deadline = 5;
   string message = 6;
+}
+
+message BlastRadius {
+  int32 files_scanned = 1;
+  int32 resources_observed = 2;
+  int32 security_findings = 3;
+  int32 secrets_found = 4;
+  int32 protected_findings = 5;
 }
